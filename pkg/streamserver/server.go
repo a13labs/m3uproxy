@@ -256,7 +256,7 @@ func (s *StreamServer) secure(next http.Handler) http.Handler {
 
 		countryCode := record.Country.IsoCode
 		if _, ok := s.geoipWhitelist[countryCode]; !ok {
-			logger.Infof("Access Denied: %s, Country: %s", ip, countryCode)
+			logger.Warnf("Access Denied: %s, Country: %s", ip, countryCode)
 			http.Error(w, "Access Denied", http.StatusForbidden)
 			return
 		}

@@ -200,6 +200,6 @@ func (u *UpstreamConnection) Get(method, URI string) ([]byte, int, contenttype.M
 	// release response now that we copied the body to our buffer
 	fasthttp.ReleaseResponse(resp)
 
-	logger.Infof("Successfully retrieved %d bytes from %s %s", len(dst), method, URI)
+	logger.Debugf("Successfully retrieved %d bytes from %s %s", len(dst), method, URI)
 	return dst, statusCode, ct, nil
 }
