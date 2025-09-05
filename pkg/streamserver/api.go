@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/a13labs/a13core/auth"
-	authproviders "github.com/a13labs/a13core/auth/providers"
+	"github.com/a13labs/m3uproxy/pkg/auth"
+	authproviders "github.com/a13labs/m3uproxy/pkg/auth/providers"
 	"github.com/a13labs/m3uproxy/pkg/provider"
 	"github.com/gorilla/mux"
 )

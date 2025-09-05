@@ -8,6 +8,10 @@
             "mode": "debug",
             "program": "server/main.go",
             "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "env": {
+                "LOG_LEVEL": "debug"
+            },
             "args": [
                 "server",
                 "-c",

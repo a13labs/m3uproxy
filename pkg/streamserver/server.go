@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/a13labs/a13core/auth"
-	"github.com/a13labs/a13core/logger"
+	"github.com/a13labs/m3uproxy/pkg/auth"
+	"github.com/a13labs/m3uproxy/pkg/logger"
 	"github.com/oschwald/geoip2-golang"
 
 	"github.com/gorilla/mux"
@@ -46,7 +46,12 @@ func NewStreamServer(configPath string) *StreamServer {
 
 func (s *StreamServer) Run() {
 
-	logger.Init(s.config.data.LogFile)
+	// Initialize logger with log level support
+	if s.config.data.LogLevel != "" {
+		logger.InitWithLevel(s.config.data.LogFile, s.config.data.LogLevel)
+	} else {
+		logger.Init(s.config.data.LogFile)
+	}
 
 	s.channels = NewChannelsHandler(s.config)
 	s.api = NewAPIHandler(s.config, &s.restartChan, s.channels)

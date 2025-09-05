@@ -3,7 +3,7 @@ package streamserver
 import (
 	"net/http"
 
-	"github.com/a13labs/a13core/logger"
+	"github.com/a13labs/m3uproxy/pkg/logger"
 	"github.com/gorilla/mux"
 )
 

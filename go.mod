@@ -14,7 +14,6 @@ require (
 )
 
 require (
-	github.com/a13labs/a13core v0.0.1 // indirect
 	github.com/andybalholm/brotli v1.1.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect

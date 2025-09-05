@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/a13labs/a13core/auth"
+	"github.com/a13labs/m3uproxy/pkg/auth"
 	"github.com/a13labs/m3uproxy/pkg/streamserver"
 	rootCmd "github.com/a13labs/m3uproxy/server/cmd"
 

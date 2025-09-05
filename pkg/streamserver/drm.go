@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/a13labs/a13core/auth"
-	"github.com/a13labs/a13core/logger"
+	"github.com/a13labs/m3uproxy/pkg/auth"
+	"github.com/a13labs/m3uproxy/pkg/logger"
 )
 
 type streamLicense struct {

@@ -26,6 +26,7 @@ type ConfigData struct {
 	Security   SecurityConfig  `json:"security,omitempty"`
 	Auth       json.RawMessage `json:"auth"`
 	LogFile    string          `json:"log_file,omitempty"`
+	LogLevel   string          `json:"log_level,omitempty"`
 }
 
 type ServerConfig struct {

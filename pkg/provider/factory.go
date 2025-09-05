@@ -3,7 +3,7 @@ package provider
 import (
 	"errors"
 
-	"github.com/a13labs/a13core/logger"
+	"github.com/a13labs/m3uproxy/pkg/logger"
 	"github.com/a13labs/m3uproxy/pkg/m3uparser"
 	"github.com/a13labs/m3uproxy/pkg/provider/file"
 	"github.com/a13labs/m3uproxy/pkg/provider/iptvorg"

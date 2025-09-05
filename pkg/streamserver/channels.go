@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/a13labs/a13core/auth"
-	"github.com/a13labs/a13core/logger"
+	"github.com/a13labs/m3uproxy/pkg/auth"
+	"github.com/a13labs/m3uproxy/pkg/logger"
 	"github.com/a13labs/m3uproxy/pkg/m3uparser"
 	"github.com/a13labs/m3uproxy/pkg/provider"
 	"github.com/a13labs/m3uproxy/pkg/sources"
