@@ -1,5 +1,5 @@
 # Stage 1: Build the Go binary
-FROM golang:1.23.4-alpine AS go-builder
+FROM golang:1.24.0-alpine AS go-builder
 
 # Set the working directory
 WORKDIR /app
