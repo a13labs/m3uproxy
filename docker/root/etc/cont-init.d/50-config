@@ -1,0 +1,10 @@
+#!/usr/bin/with-contenv bash
+
+# permissions
+echo "Fixing /config permissions. . ."
+chown -R abc:abc \
+  /config
+
+# chown the app directory, but not node_modules
+echo "Fixing app permissions. . ."
+find /app/epg -maxdepth 1 ! -name node_modules ! -name epg -exec chown -R abc:abc '{}' \;

@@ -50,11 +50,13 @@ class Playlist extends Component {
                 lines.forEach((line) => {
                     if (line.startsWith("#EXTINF:")) {
                         if (item.source) items.push(item);
-                        item = { name: '', logo: '', source: '', number: number++ };
+                        item = { id: '', name: '', logo: '', source: '', number: number++ };
                         const name = line.split(',')[1];
                         item.name = name;
                         const logoMatch = line.match(/tvg-logo="([^"]+)"/);
                         if (logoMatch) item.logo = logoMatch[1];
+                        const idMatch = line.match(/tvg-id="([^"]+)"/);
+                        if (idMatch) item.id = idMatch[1];
                     } else if (line && !line.startsWith("#")) {
                         item.source = line;
                     }

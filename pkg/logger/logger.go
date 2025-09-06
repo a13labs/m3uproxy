@@ -27,20 +27,7 @@ func Init(logFile string) {
 		return
 	}
 
-	// Check for various environment variable names
-	level := os.Getenv("LOG_LEVEL")
-	if level == "" {
-		level = os.Getenv("LOGLEVEL")
-	}
-	if level == "" {
-		level = os.Getenv("M3UPROXY_LOG_LEVEL")
-	}
-
-	if level == "" {
-		level = "info"
-	}
-
-	InitWithLevel(logFile, level)
+	InitWithLevel(logFile, InfoLevel)
 }
 
 // InitWithLevel initializes the logger with a specific log level
@@ -48,6 +35,17 @@ func InitWithLevel(logFile string, level string) {
 	if log != nil {
 		// Logger already initialized
 		return
+	}
+
+	// Environment overrides any provided level
+	envLevel := os.Getenv("LOG_LEVEL")
+
+	if envLevel != "" {
+		level = envLevel
+	}
+
+	if level == "" {
+		level = InfoLevel // Default log level
 	}
 
 	log = &logrus.Logger{

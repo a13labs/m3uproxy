@@ -177,7 +177,7 @@ func getStreams(channels map[string]cachedEntry, config IPTVOrgConfig) ([]m3upar
 					Tag:   "tvg-group",
 					Value: "TV",
 				})
-				if cache.iptvChannel.Categories != nil {
+				if len(cache.iptvChannel.Categories) != 0 {
 					extinftags = append(extinftags, m3uparser.M3UTvgTag{
 						Tag:   "tvg-type",
 						Value: cache.iptvChannel.Categories[0],

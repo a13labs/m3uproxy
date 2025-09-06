@@ -75,6 +75,12 @@ class Player extends Component {
         this.player.attach(this.video.current).then(() => {
             const { onReady } = this.props;
             console.log('Player attached to video element');
+            
+            // Add event listeners for video events
+            this.video.current.addEventListener('loadstart', this.handleLoadStart);
+            this.video.current.addEventListener('canplay', this.handleCanPlay);
+            this.video.current.addEventListener('timeupdate', this.handleTimeUpdate);
+            
             if (onReady) {
                 onReady();
             }
@@ -85,6 +91,11 @@ class Player extends Component {
 
 
     componentWillUnmount() {
+        if (this.video.current) {
+            this.video.current.removeEventListener('loadstart', this.handleLoadStart);
+            this.video.current.removeEventListener('canplay', this.handleCanPlay);
+            this.video.current.removeEventListener('timeupdate', this.handleTimeUpdate);
+        }
         if (this.player) {
             this.player.destroy();
         }
@@ -112,6 +123,30 @@ class Player extends Component {
         }
         if (onError) {
             onError(err);
+        }
+    };
+
+    handleLoadStart = () => {
+        const { onLoadStart } = this.props;
+        console.log('Video load started');
+        if (onLoadStart) {
+            onLoadStart();
+        }
+    };
+
+    handleCanPlay = () => {
+        const { onCanPlay } = this.props;
+        console.log('Video can play');
+        if (onCanPlay) {
+            onCanPlay();
+        }
+    };
+
+    handleTimeUpdate = () => {
+        const { onTimeUpdate } = this.props;
+        if (this.video.current && onTimeUpdate) {
+            const currentTime = this.video.current.currentTime;
+            onTimeUpdate(currentTime);
         }
     };
 

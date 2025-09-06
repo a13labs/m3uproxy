@@ -48,6 +48,69 @@
                 "isDefault": false
             },
             "problemMatcher": []
+        },
+        {
+            "label": "Start epg server",
+            "type": "shell",
+            "command": "podman run --rm -d -p 5000:3000 --user 1000:1000 -v $(pwd)/dev/channels.xml:/app/epg/channels.xml:Z -e DAYS=2 localhost/iptv-org/epg",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "isBackground": true,
+            "problemMatcher": [
+                {
+                    "owner": "custom",
+                    "fileLocation": [
+                        "relative",
+                        "${workspaceFolder}"
+                    ],
+                    "pattern": [
+                        {
+                            "regexp": ".",
+                            "file": 1,
+                            "location": 2,
+                            "message": 3
+                        }
+                    ],
+                    "background": {
+                        "activeOnStart": true,
+                        "beginsPattern": ".*",
+                        "endsPattern": ".*"
+                    }
+                }
+            ]
+        },
+        {
+            "label": "Stop epg server",
+            "type": "shell",
+            "command": "podman stop $(docker ps -q --filter ancestor=iptv-org/epg)",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "problemMatcher": [
+                {
+                    "owner": "custom",
+                    "fileLocation": [
+                        "relative",
+                        "${workspaceFolder}"
+                    ],
+                    "pattern": [
+                        {
+                            "regexp": ".",
+                            "file": 1,
+                            "location": 2,
+                            "message": 3
+                        }
+                    ],
+                    "background": {
+                        "activeOnStart": false,
+                        "beginsPattern": ".*",
+                        "endsPattern": ".*"
+                    }
+                }
+            ]
         }
     ]
 }

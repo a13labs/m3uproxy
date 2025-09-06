@@ -1,0 +1,84 @@
+FROM alpine:3.22
+
+# set version label
+ARG BUILD_DATE
+ARG VERSION
+LABEL build_version="Linuxserver.io version:- ${VERSION} Build-date:- ${BUILD_DATE}"
+LABEL maintainer="o-mutt"
+
+# Create non-root user
+RUN addgroup -g 1000 epguser && \
+    adduser -D -u 1000 -G epguser -h /app/epg epguser
+
+# environment variables.
+ENV \
+  HOME="/app/epg" \
+  NODE_ENV="production"
+
+COPY docker/epgserver/entrypoint.sh /
+
+RUN mkdir -p /app/epg /config /public /app/epg/temp && \
+  echo "**** install build dependencies ****" && \
+  apk add --no-cache --virtual=build-dependencies \
+  g++ \
+  make \
+  git && \
+  echo "**** pulling epg repo to build****" && \
+  git clone --depth 1 -b master https://github.com/iptv-org/epg.git /tmp/epg && \
+  mv /tmp/epg/* /app/epg && \
+  echo "**** install runtime packages ****" && \
+  apk add --no-cache \
+  nodejs \
+  curl \
+  npm && \
+  cp /entrypoint.sh /app/epg/ && \
+  chmod +x /app/epg/entrypoint.sh && \
+  echo "**** set permissions ****" && \
+  chown -R epguser:epguser /app/epg /config /public /app/epg/temp
+
+WORKDIR /app/epg
+
+# Switch to non-root user
+USER epguser
+
+RUN npm install npm@latest && \
+    npm install pm2 && \
+    ln -s /config /app/epg && \
+    ln -s /public /app/epg/public && \
+    touch /public/DOCKER && \
+    touch /config/DOCKER && \
+    echo "**** cleanup ****"
+
+# Switch to root temporarily for cleanup
+USER root
+
+RUN echo "**** cleanup ****" && \
+  apk del --purge \
+  build-dependencies && \
+  rm -rf \
+  /tmp/* \
+  /root/.cache \
+  /app/epg/.next/cache/*
+
+# Switch back to non-root user
+USER epguser
+
+# Note: For cron functionality, you would need to use an entrypoint script
+# that sets up cron for the non-root user, as direct crontab access is limited
+
+# ports and volumes
+EXPOSE 3000
+
+RUN ls /app/epg && cat /app/epg/entrypoint.sh
+
+VOLUME /config
+VOLUME /public
+ENV CRON_SCHEDULE="0 0 * * *"
+ENV GZIP=true
+ENV CURL=true
+ENV MAX_CONNECTIONS=1
+ENV DAYS=
+ENV RUN_AT_STARTUP=true
+ENV DATA_DIR="/app/epg/temp"
+ARG SITE="**"
+ENTRYPOINT /app/epg/entrypoint.sh

@@ -148,6 +148,56 @@ html {
     left: 30px;
 }
 
+.overlay .program-info {
+    position: absolute;
+    bottom: 100px;
+    left: 30px;
+    right: 30px;
+    background-color: rgba(0, 0, 0, 0.8);
+    padding: 20px;
+    border-radius: 10px;
+    color: white;
+    z-index: 100;
+}
+
+.overlay .program-title {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.overlay .program-time {
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+    color: #ccc;
+}
+
+.overlay .program-progress {
+    margin-bottom: 15px;
+}
+
+.overlay .progress-bar {
+    width: 100%;
+    height: 6px;
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.overlay .progress-fill {
+    height: 100%;
+    background-color: #007bff;
+    transition: width 0.3s ease;
+}
+
+.overlay .program-description {
+    font-size: 1rem;
+    line-height: 1.4;
+    color: #eee;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
 /* Media Queries for Mobile Devices */
 @media (max-width: 600px) {
     .playlist .scroll span {
@@ -187,6 +237,34 @@ html {
         align-items: center;
         padding: 10px;
         height: 95vh;
+    }
+
+    .overlay .program-info {
+        bottom: 50px;
+        left: 15px;
+        right: 15px;
+        padding: 15px;
+    }
+
+    .overlay .program-title {
+        font-size: 1.5rem;
+        margin-bottom: 8px;
+    }
+
+    .overlay .program-time {
+        font-size: 1rem;
+        margin-bottom: 10px;
+    }
+
+    .overlay .program-description {
+        font-size: 0.9rem;
+        max-height: 80px;
+    }
+
+    .overlay .channel-name,
+    .overlay .channel-number {
+        font-size: 2rem;
+        top: 40px;
     }
 
 }

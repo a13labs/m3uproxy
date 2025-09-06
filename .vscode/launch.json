@@ -9,6 +9,8 @@
             "program": "server/main.go",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
+            "preLaunchTask": "Start epg server",
+            "postDebugTask": "Stop epg server",
             "env": {
                 "LOG_LEVEL": "debug"
             },
@@ -51,7 +53,8 @@
             "env": {
                 "NODE_ENV": "production"
             }
-        }
+        },
+
     ],
     "compounds": [
         {
