@@ -109,6 +109,11 @@ func (e *EPGHandler) channelEpgRequest(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				reqTime, err := parseTimestamp(timestamp)
+				if err == nil && startTime != nil {
+					// Convert reqTime to the same location as startTime
+					convertedReqTime := reqTime.In(startTime.Location())
+					reqTime = &convertedReqTime
+				}
 				if err != nil {
 					http.Error(w, "Error parsing request timestamp", http.StatusInternalServerError)
 					logger.Errorf("Error parsing request timestamp: %v", err)

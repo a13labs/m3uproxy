@@ -54,8 +54,19 @@ class EpgService {
         const minutes = String(date.getMinutes()).padStart(2, '0');
         const seconds = String(date.getSeconds()).padStart(2, '0');
         
-        // Get timezone offset
-        const timezoneOffset = -date.getTimezoneOffset();
+        // Check if client is currently observing daylight saving time
+        const jan = new Date(date.getFullYear(), 0, 1);
+        const jul = new Date(date.getFullYear(), 6, 1);
+        const standardOffset = Math.max(jan.getTimezoneOffset(), jul.getTimezoneOffset());
+        const isDST = date.getTimezoneOffset() < standardOffset;
+
+        if (isDST) {
+            // If in DST, use standard time for offset calculation
+            date = new Date(date.getTime() + (standardOffset - date.getTimezoneOffset()) * 60 * 1000);
+        }
+        // Get timezone offset ignoring daylight saving (use standard time)
+
+        const timezoneOffset = -standardOffset;
         const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60);
         const offsetMinutes = Math.abs(timezoneOffset) % 60;
         const offsetSign = timezoneOffset >= 0 ? '+' : '-';
