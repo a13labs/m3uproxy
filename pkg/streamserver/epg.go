@@ -35,7 +35,7 @@ func (e *EPGHandler) RegisterRoutes(r *mux.Router) *mux.Router {
 
 func (e *EPGHandler) Start(ctx context.Context) {
 	go func() {
-		ticker := time.NewTicker(time.Duration(e.config.data.ScanTime) * time.Second)
+		ticker := time.NewTicker(time.Duration(e.config.data.EPGScanTime) * time.Second)
 		defer ticker.Stop()
 		e.UpdateSources(ctx)
 		for {
@@ -52,7 +52,8 @@ func (e *EPGHandler) Start(ctx context.Context) {
 }
 
 func (e *EPGHandler) UpdateSources(ctx context.Context) {
-	newUpdateTTime := time.Now().Add(time.Duration(e.config.data.ScanTime) * time.Second)
+
+	newUpdateTTime := time.Now().Add(time.Duration(e.config.data.EPGScanTime) * time.Second)
 	if e.lastUpdated.After(newUpdateTTime) {
 		logger.Debugf("Skipping EPG update: last update was at %v, next scheduled for %v", e.lastUpdated, newUpdateTTime)
 		return
@@ -139,7 +140,10 @@ func (e *EPGHandler) UpdateSources(ctx context.Context) {
 				logger.Errorf("Error getting info for file %s: %v", file.Name(), err)
 				continue
 			}
-			if time.Since(info.ModTime()) > 24*time.Hour {
+			// Remove files older than the current newUpdateTTime
+			// (to avoid removing files just created in this update cycle)
+			//
+			if time.Since(info.ModTime()) > time.Duration(e.config.data.EPGScanTime)*time.Second && info.ModTime().Before(newUpdateTTime) {
 				err := os.Remove(e.config.data.CacheDir + "/" + file.Name())
 				if err != nil {
 					logger.Errorf("Failed to remove old EPG file %s: %v", file.Name(), err)
