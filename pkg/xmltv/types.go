@@ -1,7 +1,7 @@
 package xmltv
 
 import (
-	"github.com/a13labs/m3uproxy/pkg/xmltv/internal/types"
+	"github.com/a13labs/m3uproxy/pkg/xmltv/types"
 )
 
 // Time is a public alias of the internal time type

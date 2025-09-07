@@ -6,7 +6,7 @@ package xmltv
 import (
 	"encoding/xml"
 
-	"github.com/a13labs/m3uproxy/pkg/xmltv/internal/types"
+	"github.com/a13labs/m3uproxy/pkg/xmltv/types"
 )
 
 // EPG is an alias for TV.

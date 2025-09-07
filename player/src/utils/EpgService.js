@@ -16,7 +16,7 @@ class EpgService {
 
         const username = localStorage.getItem('username');
         const password = localStorage.getItem('password');
-        const headers = { 
+        const headers = {
             Authorization: 'Basic ' + btoa(`${username}:${password}`)
         };
 
@@ -25,19 +25,20 @@ class EpgService {
         const timestamp = this.formatTimestamp(now);
 
         const url = `${this.baseUrl}/${encodeURIComponent(channelId)}?timestamp=${encodeURIComponent(timestamp)}`;
-        
+
         try {
             Logger.info(`Fetching EPG data from: ${url}`);
             const response = await fetch(url, { headers });
-            
+
             if (!response.ok) {
                 Logger.error(`EPG fetch failed: ${response.status} ${response.statusText}`);
                 return null;
             }
 
             const xmlText = await response.text();
-            const programData = this.parseEpgXml(xmlText);
-            
+            // Pass the request time so the parser can select the correct programme
+            const programData = this.parseEpgXml(xmlText, now);
+
             Logger.info('EPG data fetched successfully:', programData);
             return programData;
         } catch (error) {
@@ -53,33 +54,23 @@ class EpgService {
         const hours = String(date.getHours()).padStart(2, '0');
         const minutes = String(date.getMinutes()).padStart(2, '0');
         const seconds = String(date.getSeconds()).padStart(2, '0');
-        
-        // Check if client is currently observing daylight saving time
-        const jan = new Date(date.getFullYear(), 0, 1);
-        const jul = new Date(date.getFullYear(), 6, 1);
-        const standardOffset = Math.max(jan.getTimezoneOffset(), jul.getTimezoneOffset());
-        const isDST = date.getTimezoneOffset() < standardOffset;
 
-        if (isDST) {
-            // If in DST, use standard time for offset calculation
-            date = new Date(date.getTime() + (standardOffset - date.getTimezoneOffset()) * 60 * 1000);
-        }
-        // Get timezone offset ignoring daylight saving (use standard time)
-
-        const timezoneOffset = -standardOffset;
-        const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60);
-        const offsetMinutes = Math.abs(timezoneOffset) % 60;
-        const offsetSign = timezoneOffset >= 0 ? '+' : '-';
+        // Use the actual current timezone offset (includes DST) and don't mutate the input date
+        const offsetMinutesTotal = -date.getTimezoneOffset(); // positive for UTC+ zones
+        const offsetSign = offsetMinutesTotal >= 0 ? '+' : '-';
+        const absOffset = Math.abs(offsetMinutesTotal);
+        const offsetHours = Math.floor(absOffset / 60);
+        const offsetMinutes = absOffset % 60;
         const timezone = `${offsetSign}${String(offsetHours).padStart(2, '0')}${String(offsetMinutes).padStart(2, '0')}`;
-        
+
         return `${year}${month}${day}${hours}${minutes}${seconds} ${timezone}`;
     }
 
-    parseEpgXml(xmlText) {
+    parseEpgXml(xmlText, targetTime) {
         try {
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-            
+
             // Check for parsing errors
             const parserError = xmlDoc.querySelector('parsererror');
             if (parserError) {
@@ -88,68 +79,96 @@ class EpgService {
             }
 
             const programmes = xmlDoc.querySelectorAll('programme');
-            
+
             if (programmes.length === 0) {
                 Logger.warn('No programme found in EPG data');
                 return null;
             }
 
-            // Get the first (current) programme
-            const programme = programmes[0];
-            
-            const titleElement = programme.querySelector('title');
-            const descElement = programme.querySelector('desc');
-            const startTime = programme.getAttribute('start');
-            const stopTime = programme.getAttribute('stop');
+            // Prefer the programme that contains targetTime (or now). If none match, fall back to the first complete programme.
+            const now = targetTime instanceof Date ? targetTime : new Date();
+            let fallback = null;
+            for (let i = 0; i < programmes.length; i++) {
+                const p = programmes[i];
+                const titleElement = p.querySelector('title');
+                const descElement = p.querySelector('desc');
+                const startAttr = p.getAttribute('start');
+                const stopAttr = p.getAttribute('stop');
 
-            if (!titleElement || !startTime || !stopTime) {
-                Logger.warn('Incomplete programme data in EPG');
-                return null;
+                if (!titleElement || !startAttr || !stopAttr) {
+                    // keep scanning; incomplete entries are ignored
+                    continue;
+                }
+
+                const startDate = this.parseXmlTvTime(startAttr);
+                const stopDate = this.parseXmlTvTime(stopAttr);
+
+                if (!startDate || !stopDate) {
+                    continue;
+                }
+
+                if (!fallback) {
+                    fallback = { titleElement, descElement, startDate, stopDate };
+                }
+
+                if (now >= startDate && now < stopDate) {
+                    return {
+                        title: titleElement.textContent,
+                        description: descElement ? descElement.textContent : '',
+                        startTime: startDate,
+                        endTime: stopDate
+                    };
+                }
             }
 
-            return {
-                title: titleElement.textContent,
-                description: descElement ? descElement.textContent : '',
-                startTime: this.parseXmltvTime(startTime),
-                endTime: this.parseXmltvTime(stopTime)
-            };
+            if (fallback) {
+                return {
+                    title: fallback.titleElement.textContent,
+                    description: fallback.descElement ? fallback.descElement.textContent : '',
+                    startTime: fallback.startDate,
+                    endTime: fallback.stopDate
+                };
+            }
+
+            Logger.warn('No usable programme found in EPG data');
+            return null;
         } catch (error) {
             Logger.error('Error parsing EPG XML:', error);
             return null;
         }
     }
 
-    parseXmltvTime(xmltvTime) {
-        // Parse XMLTV time format: "20250906185900 +0000"
-        if (!xmltvTime) return null;
-        
-        const timeString = xmltvTime.trim();
-        const year = parseInt(timeString.substr(0, 4));
-        const month = parseInt(timeString.substr(4, 2)) - 1; // months are 0-indexed
-        const day = parseInt(timeString.substr(6, 2));
-        const hour = parseInt(timeString.substr(8, 2));
-        const minute = parseInt(timeString.substr(10, 2));
-        const second = parseInt(timeString.substr(12, 2));
-        
-        // Handle timezone offset if present
-        let date = new Date(year, month, day, hour, minute, second);
-        
+    parseXmlTvTime(epgTimeString) {
+        // Parse EPG time format: "20250906185900 +0000" or "20250906185900"
+        if (!epgTimeString) return null;
+
+        const timeString = epgTimeString.trim();
+        const year = parseInt(timeString.substr(0, 4), 10);
+        const month = parseInt(timeString.substr(4, 2), 10) - 1; // months are 0-indexed
+        const day = parseInt(timeString.substr(6, 2), 10);
+        const hour = parseInt(timeString.substr(8, 2), 10);
+        const minute = parseInt(timeString.substr(10, 2), 10);
+        const second = parseInt(timeString.substr(12, 2), 10);
+
+        // If there's a timezone part, construct an ISO-8601 string and let Date parse it
         if (timeString.length > 14) {
-            const tzPart = timeString.substr(15); // Skip the space
+            // Expect a space then +HHMM or -HHMM
+            const tzPart = timeString.substr(15).trim();
             if (tzPart.length >= 5) {
                 const sign = tzPart.charAt(0);
-                const tzHours = parseInt(tzPart.substr(1, 2));
-                const tzMinutes = parseInt(tzPart.substr(3, 2));
-                
-                let offsetMinutes = tzHours * 60 + tzMinutes;
-                if (sign === '-') offsetMinutes = -offsetMinutes;
-                
-                // Adjust for timezone
-                date = new Date(date.getTime() - offsetMinutes * 60 * 1000);
+                const tzHours = tzPart.substr(1, 2);
+                const tzMinutes = tzPart.substr(3, 2);
+                const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}${sign}${tzHours}:${tzMinutes}`;
+                const d = new Date(iso);
+                if (isNaN(d.getTime())) return null;
+                return d;
             }
         }
-        
-        return date;
+
+        // No timezone provided: treat as UTC
+        const d = new Date(Date.UTC(year, month, day, hour, minute, second));
+        if (isNaN(d.getTime())) return null;
+        return d;
     }
 }
 

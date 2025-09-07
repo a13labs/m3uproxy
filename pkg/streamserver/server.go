@@ -20,7 +20,6 @@ import (
 
 type StreamServer struct {
 	running            bool
-	updateTimer        *time.Timer
 	config             *ServerConfig
 	api                *APIHandler
 	epg                *EPGHandler
@@ -82,18 +81,8 @@ func (s *StreamServer) Run() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		s.updateTimer = time.NewTimer(time.Duration(s.config.data.ScanTime) * time.Second)
-		s.running = true
-		go func() {
-			s.channels.Load(ctx)
-			for {
-				<-s.updateTimer.C
-				s.channels.Load(ctx)
-				if s.running {
-					s.updateTimer.Reset(time.Duration(s.config.data.ScanTime) * time.Second)
-				}
-			}
-		}()
+		s.epg.Start(ctx)
+		s.channels.Start(ctx)
 
 		if s.configureSecurity() != nil {
 			logger.Warn("GeoIP database not found, geo-location will not be available.")
@@ -125,7 +114,6 @@ func (s *StreamServer) Run() {
 			quitServer = false
 		}
 
-		s.updateTimer.Stop()
 		s.running = false
 		logger.Info("Stream server stopped")
 

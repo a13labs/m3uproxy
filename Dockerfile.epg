@@ -15,7 +15,7 @@ ENV \
   HOME="/app/epg" \
   NODE_ENV="production"
 
-COPY docker/epgserver/entrypoint.sh /
+COPY docker/epgserver/* /tmp/
 
 RUN mkdir -p /app/epg /config /public /app/epg/temp && \
   echo "**** install build dependencies ****" && \
@@ -31,9 +31,11 @@ RUN mkdir -p /app/epg /config /public /app/epg/temp && \
   nodejs \
   curl \
   npm && \
-  cp /entrypoint.sh /app/epg/ && \
-  chmod +x /app/epg/entrypoint.sh && \
+  cp /tmp/entrypoint.sh /app/epg/ && \
+  cp /tmp/pm2.config.js /app/epg/ && \
   echo "**** set permissions ****" && \
+  chmod +x /app/epg/entrypoint.sh && \
+  chmod 644 /app/epg/pm2.config.js && \
   chown -R epguser:epguser /app/epg /config /public /app/epg/temp
 
 WORKDIR /app/epg
@@ -81,4 +83,5 @@ ENV DAYS=
 ENV RUN_AT_STARTUP=true
 ENV DATA_DIR="/app/epg/temp"
 ARG SITE="**"
+ENV OUTPUT="/public/epg.xml"
 ENTRYPOINT /app/epg/entrypoint.sh

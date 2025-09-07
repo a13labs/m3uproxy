@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/a13labs/m3uproxy/pkg/xmltv/internal/types"
+	"github.com/a13labs/m3uproxy/pkg/xmltv/types"
 	"github.com/google/go-cmp/cmp"
 )
 

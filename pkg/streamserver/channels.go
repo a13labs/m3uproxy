@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/a13labs/m3uproxy/pkg/auth"
 	"github.com/a13labs/m3uproxy/pkg/logger"
@@ -27,7 +28,6 @@ type streamEntry struct {
 
 type ChannelsHandler struct {
 	config         *ServerConfig
-	m3uCache       *m3uparser.M3UPlaylist
 	playlistConfig *provider.PlaylistConfig
 	channelsMux    sync.RWMutex
 	channels       map[string]*streamEntry
@@ -49,21 +49,60 @@ func (p *ChannelsHandler) RegisterRoutes(r *mux.Router) *mux.Router {
 	return r
 }
 
-func (p *ChannelsHandler) loadConfig() error {
+func (p *ChannelsHandler) getActiveChannels() []*streamEntry {
+	// get a list of all active streams
+	p.channelsMux.RLock()
+	activeChannels := make([]*streamEntry, 0)
+	for _, channel := range p.channels {
+		if channel.sources.Active() {
+			activeChannels = append(activeChannels, channel)
+		}
+	}
+	p.channelsMux.RUnlock()
+	// Sort channels by index
+	for i := 0; i < len(activeChannels); i++ {
+		for j := i + 1; j < len(activeChannels); j++ {
+			if activeChannels[i].index > activeChannels[j].index {
+				activeChannels[i], activeChannels[j] = activeChannels[j], activeChannels[i]
+			}
+		}
+	}
+	return activeChannels
+}
+
+func (p *ChannelsHandler) Start(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(time.Duration(p.config.data.ScanTime) * time.Second)
+		defer ticker.Stop()
+		p.UpdateSources(ctx)
+		for {
+			select {
+			case <-ticker.C:
+				logger.Infof("Starting EPG sources update")
+				p.UpdateSources(ctx)
+			case <-ctx.Done():
+				logger.Info("Channels update routine stopping due to context cancellation")
+				return
+			}
+		}
+	}()
+}
+
+func (p *ChannelsHandler) UpdateSources(ctx context.Context) error {
 	var err error
 	p.playlistConfig, err = provider.LoadPlaylistConfig(p.config.data.Playlist)
 	if err != nil {
 		return err
 	}
 
-	p.m3uCache, err = provider.Load(p.playlistConfig)
+	m3uCache, err := provider.Load(p.playlistConfig)
 	if err != nil {
 		return err
 	}
 
 	// Load licenses
 	// For now we just support processing clearkey licenses and KODIPROP tags
-	for _, entry := range p.m3uCache.Entries {
+	for _, entry := range m3uCache.Entries {
 		keyType, keyId, keyValue := "", "", ""
 		for _, tag := range entry.Tags {
 			if tag.Tag == "KODIPROP" {
@@ -97,36 +136,7 @@ func (p *ChannelsHandler) loadConfig() error {
 		}
 	}
 
-	logger.Infof("Loaded %d streams from %s", p.m3uCache.StreamCount(), p.config.data.Playlist)
-	return nil
-}
-
-func (p *ChannelsHandler) getActiveChannels() []*streamEntry {
-	// get a list of all active streams
-	p.channelsMux.RLock()
-	activeChannels := make([]*streamEntry, 0)
-	for _, channel := range p.channels {
-		if channel.sources.Active() {
-			activeChannels = append(activeChannels, channel)
-		}
-	}
-	p.channelsMux.RUnlock()
-	// Sort channels by index
-	for i := 0; i < len(activeChannels); i++ {
-		for j := i + 1; j < len(activeChannels); j++ {
-			if activeChannels[i].index > activeChannels[j].index {
-				activeChannels[i], activeChannels[j] = activeChannels[j], activeChannels[i]
-			}
-		}
-	}
-	return activeChannels
-}
-
-func (p *ChannelsHandler) Load(ctx context.Context) error {
-
-	if err := p.loadConfig(); err != nil {
-		return err
-	}
+	logger.Infof("Loaded %d streams from %s", m3uCache.StreamCount(), p.config.data.Playlist)
 
 	var wg sync.WaitGroup
 	streamsChan := make(chan *streamEntry)
@@ -138,7 +148,7 @@ func (p *ChannelsHandler) Load(ctx context.Context) error {
 	}
 
 	go func() {
-		for i, entry := range p.m3uCache.Entries {
+		for i, entry := range m3uCache.Entries {
 			select {
 			case <-ctx.Done():
 				stopWorkers <- true
