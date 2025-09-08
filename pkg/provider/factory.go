@@ -10,6 +10,9 @@ import (
 	types "github.com/a13labs/m3uproxy/pkg/provider/types"
 )
 
+// NewProvider returns a concrete M3U provider implementation based on the
+// supplied configuration. It returns nil when the requested provider is not
+// available; callers should handle that case and surface a helpful error.
 func NewProvider(config ProviderConfig) types.M3UProvider {
 
 	switch config.Provider {
@@ -22,8 +25,23 @@ func NewProvider(config ProviderConfig) types.M3UProvider {
 	}
 }
 
+// Load merges playlists from the configured providers into a single
+// master playlist. Configuration controls ordering, per-provider tag
+// filtering and per-channel overrides.
+//
+// Behaviour summary:
+//   - If ProvidersPriority is provided, provider names must match the
+//     Providers map length and that order is used; otherwise providers are
+//     iterated in map order.
+//   - Per-provider `IgnoreTags` can exclude entries that match tag/value
+//     combinations.
+//   - Per-channel `Overrides` allow renaming, URL substitution and adding
+//     headers or transport hints.
 func Load(config *PlaylistConfig) (*m3uparser.M3UPlaylist, error) {
 
+	// Build provider iteration order. When ProvidersPriority is provided we
+	// validate it matches the number of declared providers to avoid
+	// accidental misconfiguration.
 	providersPriority := make([]string, 0)
 	if config.ProvidersPriority != nil {
 		if len(config.ProvidersPriority) != len(config.Providers) {
@@ -53,6 +71,8 @@ func Load(config *PlaylistConfig) (*m3uparser.M3UPlaylist, error) {
 		ignoreTags := config.Providers[providerName].IgnoreTags
 		for _, entry := range playlist.Entries {
 
+			// Determine if this entry should be skipped based on configured
+			// ignore tag/value pairs for the current provider.
 			skip := false
 			for _, tag := range entry.ExtInfTags {
 				v, ok := ignoreTags[tag.Tag]
@@ -60,18 +80,21 @@ func Load(config *PlaylistConfig) (*m3uparser.M3UPlaylist, error) {
 			}
 
 			if skip {
-				logger.Infof("Channel '%s' is ignored, skipping.", entry.Title)
+				logger.Infof("Ignoring channel '%s' from provider '%s' (matched ignore tags)", entry.Title, providerName)
 				continue
 			}
 
+			// Use tvg-id when present, otherwise fall back to the human
+			// readable title. tvg-id is used as the canonical channel key.
 			tvgId := entry.ExtInfTags.GetValue("tvg-id")
 			if tvgId == "" {
 				tvgId = entry.Title
 			}
 
+			// Apply per-channel overrides (disabled flag, rename, URL, etc.)
 			override, ok := config.Overrides[tvgId]
 			if ok && override.Disabled {
-				logger.Infof("Channel '%s' is disabled, skipping.", entry.Title)
+				logger.Infof("Channel '%s' (tvg-id=%s) is disabled by override, skipping.", entry.Title, tvgId)
 				continue
 			}
 			if ok && override.ChannelName != "" {
@@ -110,8 +133,10 @@ func Load(config *PlaylistConfig) (*m3uparser.M3UPlaylist, error) {
 		}
 	}
 
+	// If a specific channel order is provided, reorder the resulting entries
+	// so the entries listed in ChannelOrder appear first in that sequence.
 	if len(config.ChannelOrder) > 0 {
-		logger.Info("Ordering playlist by provided channel order.")
+		logger.Info("Reordering playlist according to configured ChannelOrder")
 
 		for needle, channel := range config.ChannelOrder {
 			for pos := needle; pos < len(masterPlaylist.Entries); pos++ {

@@ -287,7 +287,19 @@ func (h *APIHandler) diagnosticChannelRequest(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	data, err := json.Marshal(channel.sources.Diagnostic())
+	diag := channel.sources.Diagnostic()
+
+	// Truncate body if too long
+	for i := range diag.Sources {
+		for j := range diag.Sources[i].Diagnostics {
+			if len(diag.Sources[i].Diagnostics[j].Body) > 500 {
+				diag.Sources[i].Diagnostics[j].Body = diag.Sources[i].Diagnostics[j].Body[:500] + "..."
+			}
+		}
+	}
+
+	data, err := json.Marshal(diag)
+
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

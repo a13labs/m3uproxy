@@ -17,27 +17,42 @@ import (
 )
 
 var (
+	// licenseManger holds per-process DRM license keys discovered while
+	// parsing playlist entries. It is intentionally package-level so the
+	// handler workers can register licenses discovered during parsing.
+	// Note: the variable name preserves historical spelling for
+	// compatibility within this package.
 	licenseManger *streamLicenseManager
 )
 
+// streamEntry groups metadata and sources for a single logical channel.
+//
+// Fields:
+//   - index: original order in the playlist (used for stable sorting)
+//   - tvgId: identifier used for EPG matching and playlist URIs
+//   - sources: collection of backend sources for the channel
 type streamEntry struct {
-	index   int
 	tvgId   string
 	sources sources.Sources
+	entry   m3uparser.M3UEntry
 }
 
+// ChannelsHandler manages the in-memory set of channels and their sources
+// and provides HTTP handlers to serve playlists, manifests and media.
 type ChannelsHandler struct {
 	config         *ServerConfig
 	playlistConfig *provider.PlaylistConfig
 	channelsMux    sync.RWMutex
-	channels       map[string]*streamEntry
+	channels       []*streamEntry
+	channelsIdMap  map[string]int
 }
 
 func NewChannelsHandler(config *ServerConfig) *ChannelsHandler {
 	return &ChannelsHandler{
-		config:      config,
-		channels:    make(map[string]*streamEntry),
-		channelsMux: sync.RWMutex{},
+		config:        config,
+		channels:      make([]*streamEntry, 0),
+		channelsIdMap: make(map[string]int),
+		channelsMux:   sync.RWMutex{},
 	}
 }
 
@@ -59,14 +74,6 @@ func (p *ChannelsHandler) getActiveChannels() []*streamEntry {
 		}
 	}
 	p.channelsMux.RUnlock()
-	// Sort channels by index
-	for i := 0; i < len(activeChannels); i++ {
-		for j := i + 1; j < len(activeChannels); j++ {
-			if activeChannels[i].index > activeChannels[j].index {
-				activeChannels[i], activeChannels[j] = activeChannels[j], activeChannels[i]
-			}
-		}
-	}
 	return activeChannels
 }
 
@@ -78,10 +85,12 @@ func (p *ChannelsHandler) Start(ctx context.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				logger.Infof("Starting EPG sources update")
+				// Periodic update of playlist sources from configured
+				// playlist provider(s).
+				logger.Infof("EPG sources update triggered")
 				p.UpdateSources(ctx)
 			case <-ctx.Done():
-				logger.Info("Channels update routine stopping due to context cancellation")
+				logger.Info("Channels update routine stopping: context canceled")
 				return
 			}
 		}
@@ -100,8 +109,8 @@ func (p *ChannelsHandler) UpdateSources(ctx context.Context) error {
 		return err
 	}
 
-	// Load licenses
-	// For now we just support processing clearkey licenses and KODIPROP tags
+	// Load licenses found in playlist entries.
+	// Current implementation supports clearkey licenses via KODIPROP tags.
 	for _, entry := range m3uCache.Entries {
 		keyType, keyId, keyValue := "", "", ""
 		for _, tag := range entry.Tags {
@@ -125,7 +134,7 @@ func (p *ChannelsHandler) UpdateSources(ctx context.Context) error {
 							if licenseManger == nil {
 								licenseManger = newStreamLicenseManager()
 							}
-							logger.Infof("Found license, adding license key with id %s", keyId)
+							logger.Infof("Discovered CLEARKEY license: adding key id=%s", keyId)
 							licenseManger.addLicense("clearkey", keyId, keyValue)
 							keyType, keyId, keyValue = "", "", ""
 							break
@@ -136,7 +145,7 @@ func (p *ChannelsHandler) UpdateSources(ctx context.Context) error {
 		}
 	}
 
-	logger.Infof("Loaded %d streams from %s", m3uCache.StreamCount(), p.config.data.Playlist)
+	logger.Infof("Loaded %d playlist entries from %s", m3uCache.StreamCount(), p.config.data.Playlist)
 
 	var wg sync.WaitGroup
 	streamsChan := make(chan *streamEntry)
@@ -148,6 +157,9 @@ func (p *ChannelsHandler) UpdateSources(ctx context.Context) error {
 	}
 
 	go func() {
+		availableChannels := make(map[string]*streamEntry)
+		availableChannelsIdMap := make(map[string]int)
+		channelBucket := make([]string, 0)
 		for i, entry := range m3uCache.Entries {
 			select {
 			case <-ctx.Done():
@@ -156,50 +168,105 @@ func (p *ChannelsHandler) UpdateSources(ctx context.Context) error {
 				return
 			default:
 				if entry.URI == "" {
+					// Skip entries without URIs
 					continue
 				}
 
 				tvgId := entry.ExtInfTags.GetValue("tvg-id")
 				if tvgId == "" {
+					// Fall back to the title when no tvg-id is provided
 					tvgId = entry.Title
 				}
 
 				radio := entry.ExtInfTags.GetValue("radio")
 				if tvgId == "" && radio == "" {
-					logger.Warnf("No tvg-id or radio tag found for %s, skipping", entry.URI)
+					logger.Warnf("Skipping entry without tvg-id or radio: %s", entry.URI)
 					continue
 				}
 
-				channel, ok := p.channels[tvgId]
+				_, ok := availableChannels[tvgId]
 				if !ok {
-					p.channelsMux.Lock()
-					p.channels[tvgId] = &streamEntry{
-						index:   i,
+					// New channel
+					availableChannels[tvgId] = &streamEntry{
 						tvgId:   tvgId,
 						sources: sources.NewSources(),
+						entry:   entry,
 					}
-					channel = p.channels[tvgId]
-					p.channelsMux.Unlock()
+					availableChannelsIdMap[tvgId] = i
+					channelBucket = append(channelBucket, tvgId)
 				}
-
-				if channel.sources.SourceExists(entry) {
-					logger.Warnf("Stream source already exists: %s", entry.URI)
-					continue
-				}
-
-				logger.Infof("Adding stream source for %s, for channel %s", entry.URI, tvgId)
-				added, err := channel.sources.AddSource(entry, p.config.data.Timeout)
-				if err != nil {
-					logger.Errorf("Error adding stream source for %s: %v", entry.URI, err)
-					continue
-				}
-				if !added {
-					logger.Warnf("Stream source already exists: %s", entry.URI)
-					continue
-				}
-				streamsChan <- channel
 			}
 		}
+
+		if len(p.config.data.ChannelBucket) > 0 {
+			logger.Infof("Channel bucket configured with %d channels, filtering available channels", len(p.config.data.ChannelBucket))
+			channelBucket = p.config.data.ChannelBucket
+		}
+
+		for i, channelId := range channelBucket {
+			select {
+			case <-ctx.Done():
+				stopWorkers <- true
+				wg.Wait()
+				return
+			default:
+				if channel, ok := availableChannels[channelId]; ok {
+
+					id, ok := p.channelsIdMap[channelId]
+					if ok {
+						if id != i {
+							// Switch positions
+							p.channelsMux.Lock()
+							p.channels[i], p.channels[id] = p.channels[id], p.channels[i]
+							p.channels[i] = channel
+							p.channelsIdMap[channelId] = i
+							p.channelsMux.Unlock()
+						} else {
+							// Same position, do nothing
+						}
+					} else {
+						// New channel, add it
+						p.channelsMux.Lock()
+						p.channels = append(p.channels, channel)
+						p.channelsIdMap[channelId] = i
+						p.channelsMux.Unlock()
+					}
+
+					channel := p.channels[i]
+
+					if channel.sources.SourceExists(channel.entry) {
+						logger.Warnf("Stream source already exists (skipping): %s", channel.entry.URI)
+						continue
+					}
+
+					logger.Infof("Adding stream source uri=%s to channel=%s", channel.entry.URI, channel.tvgId)
+					added, err := channel.sources.AddSource(channel.entry, p.config.data.Timeout)
+					if err != nil {
+						logger.Errorf("Failed to add stream source uri=%s: %v", channel.entry.URI, err)
+						continue
+					}
+					if !added {
+						logger.Warnf("Stream source was not added (duplicate): %s", channel.entry.URI)
+						continue
+					}
+
+					streamsChan <- channel
+				} else {
+					logger.Warnf("Channel %s not found, skipping (not in playlist?)", channelId)
+				}
+			}
+		}
+
+		// Remove channels that are no longer in the bucket
+		// We can remove everything above len(ChannelBucket)
+		p.channelsMux.Lock()
+		p.channels = p.channels[:len(channelBucket)]
+		newIdMap := make(map[string]int)
+		for i, channel := range channelBucket {
+			newIdMap[channel] = i
+		}
+		p.channelsIdMap = newIdMap
+		p.channelsMux.Unlock()
 		close(streamsChan)
 	}()
 
@@ -285,11 +352,12 @@ func (p *ChannelsHandler) manifestRequest(w http.ResponseWriter, r *http.Request
 	p.channelsMux.RLock()
 	defer p.channelsMux.RUnlock()
 
-	channel, ok := p.channels[channelId]
+	mapIndex, ok := p.channelsIdMap[channelId]
 	if !ok {
 		http.Error(w, "Stream not found", http.StatusNotFound)
 		return
 	}
+	channel := p.channels[mapIndex]
 
 	if !channel.sources.Active() {
 		http.Error(w, "Stream not active", http.StatusNotFound)
@@ -325,11 +393,12 @@ func (p *ChannelsHandler) mediaRequest(w http.ResponseWriter, r *http.Request) {
 	p.channelsMux.RLock()
 	defer p.channelsMux.RUnlock()
 
-	channel, ok := p.channels[channelId]
+	mapIndex, ok := p.channelsIdMap[channelId]
 	if !ok {
 		http.Error(w, "Stream not found", http.StatusNotFound)
 		return
 	}
+	channel := p.channels[mapIndex]
 
 	if !channel.sources.Active() {
 		http.Error(w, "Stream not active", http.StatusNotFound)
@@ -342,7 +411,11 @@ func (p *ChannelsHandler) mediaRequest(w http.ResponseWriter, r *http.Request) {
 func (p *ChannelsHandler) GetChannel(id string) *streamEntry {
 	p.channelsMux.RLock()
 	defer p.channelsMux.RUnlock()
-	return p.channels[id]
+	mapIndex, ok := p.channelsIdMap[id]
+	if !ok {
+		return nil
+	}
+	return p.channels[mapIndex]
 }
 
 func monitorWorker(streams <-chan *streamEntry, stop <-chan bool, wg *sync.WaitGroup) {

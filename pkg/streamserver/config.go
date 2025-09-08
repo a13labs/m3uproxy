@@ -17,18 +17,19 @@ type SecurityConfig struct {
 }
 
 type ConfigData struct {
-	Port        int             `json:"port"`
-	Playlist    string          `json:"playlist"`
-	Epg         []string        `json:"epg"`
-	Timeout     int             `json:"default_timeout,omitempty"`
-	NumWorkers  int             `json:"num_workers,omitempty"`
-	ScanTime    int             `json:"scan_time,omitempty"`
-	EPGScanTime int             `json:"epg_scan_time,omitempty"`
-	Security    SecurityConfig  `json:"security,omitempty"`
-	Auth        json.RawMessage `json:"auth"`
-	LogFile     string          `json:"log_file,omitempty"`
-	LogLevel    string          `json:"log_level,omitempty"`
-	CacheDir    string          `json:"cache_dir,omitempty"`
+	Port          int             `json:"port"`
+	Playlist      string          `json:"playlist"`
+	Epg           []string        `json:"epg"`
+	ChannelBucket []string        `json:"channel_bucket,omitempty"`
+	Timeout       int             `json:"default_timeout,omitempty"`
+	NumWorkers    int             `json:"num_workers,omitempty"`
+	ScanTime      int             `json:"scan_time,omitempty"`
+	EPGScanTime   int             `json:"epg_scan_time,omitempty"`
+	Security      SecurityConfig  `json:"security,omitempty"`
+	Auth          json.RawMessage `json:"auth"`
+	LogFile       string          `json:"log_file,omitempty"`
+	LogLevel      string          `json:"log_level,omitempty"`
+	CacheDir      string          `json:"cache_dir,omitempty"`
 }
 
 type ServerConfig struct {
@@ -44,13 +45,14 @@ func NewServerConfig(path string) *ServerConfig {
 	if err := c.Load(path); err != nil {
 		if os.IsNotExist(err) {
 			c.data = ConfigData{
-				Port:        8080,
-				Playlist:    "playlist.m3u",
-				Epg:         []string{"epg.xml"},
-				Timeout:     5,
-				NumWorkers:  4,
-				ScanTime:    60,
-				EPGScanTime: 86400,
+				Port:          8080,
+				Playlist:      "playlist.m3u",
+				Epg:           []string{"epg.xml"},
+				ChannelBucket: []string{},
+				Timeout:       5,
+				NumWorkers:    4,
+				ScanTime:      60,
+				EPGScanTime:   86400,
 				Security: SecurityConfig{
 					GeoIP: GeoIPConfig{
 						Database:         "GeoLite2-Country.mmdb",
