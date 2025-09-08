@@ -80,7 +80,7 @@ func Load(config *PlaylistConfig) (*m3uparser.M3UPlaylist, error) {
 			}
 
 			if skip {
-				logger.Infof("Ignoring channel '%s' from provider '%s' (matched ignore tags)", entry.Title, providerName)
+				logger.Debugf("Ignoring channel '%s' from provider '%s' (matched ignore tags)", entry.Title, providerName)
 				continue
 			}
 
@@ -94,7 +94,7 @@ func Load(config *PlaylistConfig) (*m3uparser.M3UPlaylist, error) {
 			// Apply per-channel overrides (disabled flag, rename, URL, etc.)
 			override, ok := config.Overrides[tvgId]
 			if ok && override.Disabled {
-				logger.Infof("Channel '%s' (tvg-id=%s) is disabled by override, skipping.", entry.Title, tvgId)
+				logger.Debugf("Channel '%s' (tvg-id=%s) is disabled by override, skipping.", entry.Title, tvgId)
 				continue
 			}
 			if ok && override.ChannelName != "" {

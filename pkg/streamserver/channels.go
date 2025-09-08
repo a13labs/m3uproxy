@@ -64,19 +64,6 @@ func (p *ChannelsHandler) RegisterRoutes(r *mux.Router) *mux.Router {
 	return r
 }
 
-func (p *ChannelsHandler) getActiveChannels() []*streamEntry {
-	// get a list of all active streams
-	p.channelsMux.RLock()
-	activeChannels := make([]*streamEntry, 0)
-	for _, channel := range p.channels {
-		if channel.sources.Active() {
-			activeChannels = append(activeChannels, channel)
-		}
-	}
-	p.channelsMux.RUnlock()
-	return activeChannels
-}
-
 func (p *ChannelsHandler) Start(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(time.Duration(p.config.data.ScanTime) * time.Second)
@@ -298,13 +285,10 @@ func (p *ChannelsHandler) playlistRequest(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("#EXTM3U\n"))
 
-	activeChannels := p.getActiveChannels()
-	if len(activeChannels) == 0 {
-		return
-	}
-
 	// Write the playlist
-	for _, channel := range activeChannels {
+	p.channelsMux.RLock()
+	defer p.channelsMux.RUnlock()
+	for _, channel := range p.channels {
 		if !channel.sources.Active() {
 			continue
 		}
@@ -349,15 +333,11 @@ func (p *ChannelsHandler) manifestRequest(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	p.channelsMux.RLock()
-	defer p.channelsMux.RUnlock()
-
-	mapIndex, ok := p.channelsIdMap[channelId]
-	if !ok {
+	channel := p.GetChannel(channelId)
+	if channel == nil {
 		http.Error(w, "Stream not found", http.StatusNotFound)
 		return
 	}
-	channel := p.channels[mapIndex]
 
 	if !channel.sources.Active() {
 		http.Error(w, "Stream not active", http.StatusNotFound)
@@ -390,15 +370,11 @@ func (p *ChannelsHandler) mediaRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.channelsMux.RLock()
-	defer p.channelsMux.RUnlock()
-
-	mapIndex, ok := p.channelsIdMap[channelId]
-	if !ok {
+	channel := p.GetChannel(channelId)
+	if channel == nil {
 		http.Error(w, "Stream not found", http.StatusNotFound)
 		return
 	}
-	channel := p.channels[mapIndex]
 
 	if !channel.sources.Active() {
 		http.Error(w, "Stream not active", http.StatusNotFound)

@@ -118,7 +118,7 @@ func (u *UpstreamConnection) Check(method string, uri string) (string, contentty
 			continue
 		}
 
-		logger.Infof("Upstream check completed for %s: final_url=%s, status=%d, content_type=%s, redirects=%d",
+		logger.Debugf("Upstream check completed for %s: final_url=%s, status=%d, content_type=%s, redirects=%d",
 			uri, currentURL, statusCode, ct.String(), redirectCount)
 		return currentURL, ct, nil
 	}

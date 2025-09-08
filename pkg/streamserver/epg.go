@@ -112,7 +112,7 @@ func (e *EPGHandler) UpdateSources(ctx context.Context) {
 						logger.Errorf("Failed to write EPG file for channel %s to %s: %v", channel.ID, filename, err)
 						continue
 					}
-					logger.Infof("Saved EPG for channel %s to %s", channel.ID, filename)
+					logger.Debugf("Saved EPG for channel %s to %s", channel.ID, filename)
 				}
 			}
 		}
@@ -129,7 +129,7 @@ func (e *EPGHandler) UpdateSources(ctx context.Context) {
 	for _, file := range files {
 		select {
 		case <-ctx.Done():
-			logger.Info("EPG cleanup routine stopping due to context cancellation")
+			logger.Debug("EPG cleanup routine stopping due to context cancellation")
 			return
 		default:
 			if file.IsDir() {
@@ -137,7 +137,7 @@ func (e *EPGHandler) UpdateSources(ctx context.Context) {
 			}
 			info, err := file.Info()
 			if err != nil {
-				logger.Errorf("Error getting info for file %s: %v", file.Name(), err)
+				logger.Debugf("Error getting info for file %s: %v", file.Name(), err)
 				continue
 			}
 			// Remove files older than the current newUpdateTTime
@@ -146,9 +146,9 @@ func (e *EPGHandler) UpdateSources(ctx context.Context) {
 			if time.Since(info.ModTime()) > time.Duration(e.config.data.EPGScanTime)*time.Second && info.ModTime().Before(newUpdateTTime) {
 				err := os.Remove(e.config.data.CacheDir + "/" + file.Name())
 				if err != nil {
-					logger.Errorf("Failed to remove old EPG file %s: %v", file.Name(), err)
+					logger.Debugf("Failed to remove old EPG file %s: %v", file.Name(), err)
 				} else {
-					logger.Infof("Removed old EPG file %s", file.Name())
+					logger.Debugf("Removed old EPG file %s", file.Name())
 				}
 			}
 		}
@@ -198,7 +198,6 @@ func (e *EPGHandler) channelEpgRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Infof("Serving EPG for channel %s: %d channels, %d programmes", channelID, len(epg.Channels), len(epg.Programmes))
 	filteredEPG := xmltv.EPG{
 		Channels:   epg.Channels,
 		Programmes: []xmltv.Programme{},
@@ -235,6 +234,7 @@ func (e *EPGHandler) channelEpgRequest(w http.ResponseWriter, r *http.Request) {
 		filteredEPG.Programmes = append(filteredEPG.Programmes, programme)
 	}
 
+	logger.Debugf("Serving EPG for channel %s: %d channels, %d programmes", channelID, len(epg.Channels), len(filteredEPG.Programmes))
 	filteredXML, err := xml.MarshalIndent(filteredEPG, "", "  ")
 	if err != nil {
 		logger.Errorf("Failed to generate filtered EPG for channel %s: %v", channelID, err)

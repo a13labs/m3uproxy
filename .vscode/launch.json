@@ -12,7 +12,7 @@
             "preLaunchTask": "Start epg server",
             "postDebugTask": "Stop epg server",
             "env": {
-                "LOG_LEVEL": "debug"
+                "LOG_LEVEL": "info"
             },
             "args": [
                 "server",
@@ -22,7 +22,7 @@
         },
         {
             "name": "Launch React SPA (Dev)",
-            "type": "msedge",
+            "type": "chrome",
             "request": "launch",
             "url": "http://localhost:3000",
             "webRoot": "${workspaceFolder}/player",
